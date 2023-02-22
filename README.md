@@ -4,13 +4,14 @@ Its goal is to add an essential function to the libft library and introduce to t
 
 ## Usage
 
-- include **get_next_line.h** header file, where you want to use `get_next_line()`
-- compile your code as follows: `gcc -Wall -Wextra -Werror -D BUFFER_SIZE=<number> <files>.c`
+- Include **get_next_line.h** header file, where you want to use the `get_next_line()` function.
+- Make sure macro `BUFFER_SIZE` is set. For example using `-D BUFFER_SIZE=<integer>` during compilation with gcc.
+- Compile with `-D GNL_V1` for usage of the first version.
 
 ---
 
 Function prototype:  `char *get_next_line(int fd);`
 
-The returned line includes the terminating \n character,
-except if the end of file was reached and the returned line does not end with a \n character.
+The returned line includes the terminating `\n` character,
+except if the end of file was reached and the returned line does not end with a `\n` character.
 Returns NULL in case of an error or if there is nothing else to read.

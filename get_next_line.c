@@ -3,123 +3,115 @@
 /*                                                        :::      ::::::::   */
 /*   get_next_line.c                                    :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: mstrantz <mstrantz@student.42.fr>          +#+  +:+       +#+        */
+/*   By: mstrantz <@student.42heilbronn.de>         +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2021/07/15 18:54:16 by mstrantz          #+#    #+#             */
-/*   Updated: 2021/07/17 11:16:26 by mstrantz         ###   ########.fr       */
+/*   Created: 2023/02/22 08:56:02 by mstrantz          #+#    #+#             */
+/*   Updated: 2023/02/22 12:22:22 by mstrantz         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "get_next_line.h"
 
-static char	*ft_separate_rest(char ***rest, int i)
+static int	t_line_init(t_line *line)
 {
-	char	*ret;
-	char	*temp;
+	int	ret;
 
-	ret = ft_substr(**rest, 0, i + 1);
-	temp = ft_strdup((**rest) + i + 1);
-	free (**rest);
-	**rest = temp;
-	if ((*rest)[0] == '\0')
-	{
-		free (temp);
-		**rest = NULL;
-	}
+	ret = 0;
+	line->allocated = BUFFER_SIZE;
+	line->w_head = 0;
+	line->chars = (char *) calloc(line->allocated, sizeof(char));
+	if (line->chars == NULL)
+		ret = -1;
 	return (ret);
 }
 
-static char	*ft_adjust_rest(char *buff, char **rest, ssize_t num)
+static char	t_buffer_get_next_char(t_buffer *buffer, int fd)
 {
-	char	*temp;
-	char	*ret;
-	int		i;
+	char	c;
 
-	if (*rest == NULL)
-		*rest = ft_strdup(buff);
-	else if (num != 0)
+	if (buffer->r_head >= buffer->w_head)
 	{
-		temp = ft_strdup(*rest);
-		free (*rest);
-		*rest = ft_strjoin(temp, buff);
-		free (temp);
+		buffer->w_head = read(fd, buffer->chars, BUFFER_SIZE);
+		buffer->r_head = 0;
 	}
-	i = 0;
-	while ((*rest)[i] != '\n' && (*rest)[i] != '\0')
-		i++;
-	if ((*rest)[i] == '\n')
-	{
-		ret = ft_separate_rest(&rest, i);
-		if (ret)
-			return (ret);
-	}
-	return (NULL);
-}
-
-static char	*ft_check_nl(char **rest)
-{
-	int		i;
-	char	*ret;
-	char	*temp;
-
-	i = 0;
-	while ((*rest)[i] != '\n' && (*rest)[i] != '\0')
-		i++;
-	if ((*rest)[0] == '\0')
-	{
-		free (*rest);
-		*rest = NULL;
-	}
-	else if ((*rest)[i] == '\n')
-	{
-		ret = ft_substr(*rest, 0, i + 1);
-		temp = ft_strdup((*rest) + i + 1);
-		free (*rest);
-		*rest = temp;
-		return (ret);
-	}
-	return (NULL);
-}
-
-static int	ft_read(int fd, char *buff, char **rest)
-{
-	int	num;
-
-	if (BUFFER_SIZE < 1)
+	if (buffer->w_head == 0)
+		return (0);
+	else if (buffer->w_head == -1)
 		return (-1);
-	num = read(fd, buff, BUFFER_SIZE);
-	if (num == -1)
-		return (num);
-	(buff)[num] = '\0';
-	if ((buff)[0] == '\0' && *rest == NULL)
-		num = -1;
-	return (num);
+	c = buffer->chars[buffer->r_head];
+	buffer->r_head++;
+	return (c);
+}
+
+static void	gnl_memcpy(char *dst, const char *src, size_t n)
+{
+	while (n > 0)
+	{
+		dst[n - 1] = src[n - 1];
+		n--;
+	}
+}
+
+static int	t_line_append_char(t_line *line, char c)
+{
+	char	*new_chars;
+	size_t	new_allocated;
+
+	if (line->w_head >= line->allocated)
+	{
+		new_allocated = line->w_head + line->allocated;
+		new_chars = (char *) calloc(new_allocated, sizeof(char));
+		if (new_chars == NULL)
+			return (-1);
+		gnl_memcpy(new_chars, line->chars, line->w_head);
+		free(line->chars);
+		line->chars = new_chars;
+		line->allocated = new_allocated;
+	}
+	line->chars[line->w_head] = c;
+	line->w_head++;
+	return (0);
+}
+
+static char	*handle_error(char *chars)
+{
+	free(chars);
+	return (NULL);
+}
+
+static char	*t_line_get_string(t_line *line)
+{
+	char	*string;
+
+	if (line->w_head <= 0)
+		return (handle_error(line->chars));
+	string = calloc(line->w_head + 1, sizeof(char));
+	if (string == NULL)
+		return (handle_error(line->chars));
+	gnl_memcpy(string, line->chars, line->w_head);
+	free(line->chars);
+	return (string);
 }
 
 char	*get_next_line(int fd)
 {
-	static char		*rest[10240];
-	char			buff[BUFFER_SIZE + 1];
-	char			*temp;
-	ssize_t			num;
+	static t_buffer	buffer;
+	t_line			line;
+	char			c;
 
-	num = 1;
-	while (num > 0)
+	if (fd < 0 || t_line_init(&line) < 0)
+		return NULL;
+	while (1)
 	{
-		if (rest[fd])
-		{
-			temp = ft_check_nl(&rest[fd]);
-			if (temp)
-				return (temp);
-		}
-		num = ft_read(fd, buff, &rest[fd]);
-		if (num == -1 || fd < 0)
-			return (NULL);
-		temp = ft_adjust_rest(buff, &rest[fd], num);
-		if (temp)
-			return (temp);
-		if (num == 0 && rest[fd])
-			return (ft_eof_rest(&temp, &rest[fd]));
+		c = t_buffer_get_next_char(&buffer, fd);
+		if (c < 0)
+			return (handle_error(line.chars));
+		if (c == 0)
+			break;
+		if (t_line_append_char(&line, c) < 0)
+			return (handle_error(line.chars));
+		if (c == '\n')
+			break;
 	}
-	return (NULL);
+	return (t_line_get_string(&line));
 }
